@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -37,6 +38,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.screenlite.webkiosk.data.KioskSettingsFactory
 import org.screenlite.webkiosk.data.Rotation
+import org.screenlite.webkiosk.data.ServerChoice
+import org.screenlite.webkiosk.data.ServerConfig
 import org.screenlite.webkiosk.service.StayOnTopService
 import org.screenlite.webkiosk.ui.theme.*
 
@@ -53,7 +56,10 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val kioskSettings = remember { KioskSettingsFactory.get(context) }
 
+    // Debug only: which server, and the address typed under Custom.
+    var serverChoice by remember { mutableStateOf(ServerChoice.LIVE) }
     var kioskUrl by remember { mutableStateOf("") }
+    var kioskUrlError by remember { mutableStateOf<String?>(null) }
     var checkIntervalSeconds by remember { mutableStateOf("") }
     var rotation by remember { mutableStateOf(Rotation.ROTATION_0) }
     var idleTimeout by remember { mutableStateOf("") }
@@ -70,7 +76,9 @@ fun SettingsScreen() {
     }
 
     LaunchedEffect(Unit) {
-        kioskUrl = kioskSettings.getStartUrl().first()
+        val stored = kioskSettings.getStartUrl().first()
+        serverChoice = ServerConfig.choiceFor(stored)
+        kioskUrl = if (serverChoice == ServerChoice.CUSTOM) stored else "https://"
         checkIntervalSeconds = (kioskSettings.getCheckInterval().first() / 1000).toString()
         rotation = kioskSettings.getRotation().first()
         idleTimeout = kioskSettings.getIdleTimeout().first().toString()
@@ -84,6 +92,16 @@ fun SettingsScreen() {
 
     val save: () -> Unit = save@{
         var hasError = false
+
+        val startUrl = when {
+            !ServerConfig.SERVER_CHOICE -> ServerConfig.LIVE_URL
+            serverChoice == ServerChoice.LIVE -> ServerConfig.LIVE_URL
+            serverChoice == ServerChoice.MAC -> ServerConfig.MAC_URL
+            else -> kioskUrl.trim()
+        }
+        if (ServerConfig.SERVER_CHOICE && serverChoice == ServerChoice.CUSTOM && !ServerConfig.isValidCustom(startUrl)) {
+            kioskUrlError = "Address: a full http:// or https:// address"; hasError = true
+        }
 
         val checkIntervalValue = checkIntervalSeconds.toLongOrNull()
         if (checkIntervalValue == null || checkIntervalValue !in 1..99999) { checkIntervalError = "Check every: 1 to 99999 seconds"; hasError = true }
@@ -101,7 +119,7 @@ fun SettingsScreen() {
 
         (context as? ComponentActivity)?.lifecycleScope?.launch {
             kioskSettings.setCheckInterval(checkIntervalValue!! * 1000L)
-            kioskSettings.setStartUrl(kioskUrl)
+            kioskSettings.setStartUrl(startUrl)
             kioskSettings.setRotation(rotation)
             kioskSettings.setIdleTimeout(idleTimeoutValue!!)
             kioskSettings.setIdleBrightness(idleBrightnessValue!!)
@@ -113,9 +131,24 @@ fun SettingsScreen() {
     }
 
     val screenGroup: @Composable () -> Unit = {
-        SettingsGroup("Screen", errors = emptyList()) {
-            TextRow("Address", kioskUrl, { kioskUrl = it }, KeyboardType.Uri)
-            Separator()
+        SettingsGroup("Screen", errors = listOfNotNull(kioskUrlError)) {
+            if (ServerConfig.SERVER_CHOICE) {
+                ChoiceRow("Server", ServerChoice.entries, serverChoice, {
+                    when (it) {
+                        ServerChoice.LIVE -> "Live"
+                        ServerChoice.MAC -> "This Mac"
+                        ServerChoice.CUSTOM -> "Custom"
+                    }
+                }) { serverChoice = it; kioskUrlError = null }
+                Separator()
+                if (serverChoice == ServerChoice.CUSTOM) {
+                    TextRow("Address", kioskUrl, { kioskUrl = it; kioskUrlError = null }, KeyboardType.Uri, isError = kioskUrlError != null)
+                    Separator()
+                }
+            } else {
+                ReadOnlyRow("Server", "Live")
+                Separator()
+            }
             ChoiceRow("Rotation", Rotation.entries, rotation, { "${it.degrees}°" }) { rotation = it }
         }
     }
@@ -289,6 +322,19 @@ private fun TextRow(
             }
         }
     )
+}
+
+/** A value that cannot be edited; still reachable with the D-pad so the list reads in order. */
+@Composable
+private fun ReadOnlyRow(label: String, value: String) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Box(Modifier.focusable(interactionSource = interaction)) {
+        RowFrame(focused) {
+            Text(label, style = RowLabel, modifier = Modifier.weight(1f))
+            Text(value, style = RowValue.copy(color = Muted), textAlign = TextAlign.End)
+        }
+    }
 }
 
 @Composable

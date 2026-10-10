@@ -8,11 +8,13 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "org.screenlite.webkiosk"
+        // The Kotlin package and namespace stay org.screenlite.webkiosk so upstream merges stay clean.
+        applicationId = "in.jaguarfitnessclub.tv"
         minSdk = 23
         targetSdk = 36
         versionCode = 11
         versionName = "0.0.11"
+        buildConfigField("String", "LIVE_URL", "\"https://desk.jaguarfitnessclub.in/tv\"")
     }
 
     val releaseKeystore = file("release.keystore")
@@ -33,9 +35,12 @@ android {
         // config (src/debug) does the same on Android 7 and later.
         debug {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
+            // Debug builds can point at this Mac or any address; release is always live.
+            buildConfigField("boolean", "SERVER_CHOICE", "true")
         }
         release {
             manifestPlaceholders["usesCleartextTraffic"] = "false"
+            buildConfigField("boolean", "SERVER_CHOICE", "false")
             // Without the keystore (local builds) the release APK is left unsigned.
             if (releaseKeystore.exists()) {
                 signingConfig = signingConfigs.getByName("release")
@@ -54,6 +59,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

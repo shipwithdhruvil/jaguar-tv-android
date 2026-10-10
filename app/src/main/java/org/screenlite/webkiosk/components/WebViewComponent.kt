@@ -46,6 +46,7 @@ fun WebViewComponent(
     val webViewManager = remember {
         WebViewManager(
             activity,
+            url,
             onError = { err ->
                 Log.e(TAG, "WebView error: $err")
                 hasError = err

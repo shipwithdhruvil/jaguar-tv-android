@@ -13,9 +13,12 @@ import android.webkit.WebView.setWebContentsDebuggingEnabled
 import androidx.annotation.RequiresApi
 import org.screenlite.webkiosk.components.RotatedWebView
 import org.screenlite.webkiosk.data.Rotation
+import org.screenlite.webkiosk.data.ServerConfig
 
 class WebViewManager(
     private val context: Context,
+    /** The configured server; only its origin may load in the main frame. */
+    private val startUrl: String,
     private val onError: (Boolean) -> Unit,
     private val onPageLoading: (Boolean) -> Unit
 ) {
@@ -86,7 +89,23 @@ class WebViewManager(
 
     private fun WebView.setupWebViewListeners() {
         webViewClient = object : WebViewClient() {
+            // Links and redirects to any other origin are dropped; subresources are unaffected.
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (!request.isForMainFrame) return false
+                if (ServerConfig.sameOrigin(request.url.toString(), startUrl)) return false
+                Log.w("WebViewManager", "Blocked navigation to ${request.url}")
+                return true
+            }
+
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                // Backstop for navigations that skip shouldOverrideUrlLoading (some redirects,
+                // script-driven loads): back to the server's own page.
+                if (url != null && url != "about:blank" && !ServerConfig.sameOrigin(url, startUrl)) {
+                    Log.w("WebViewManager", "Left the server origin ($url), reloading $startUrl")
+                    view.stopLoading()
+                    view.loadUrl(startUrl)
+                    return
+                }
                 super.onPageStarted(view, url, favicon)
                 view.visibility = View.INVISIBLE
                 onPageLoading(true)
@@ -143,21 +162,9 @@ class WebViewManager(
                 isUserGesture: Boolean,
                 resultMsg: android.os.Message?
             ): Boolean {
-                val transport = resultMsg?.obj as? WebView.WebViewTransport
-
-                val tempWebView = WebView(context).apply {
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            val url = request?.url.toString()
-                            this@WebViewManager.currentWebView?.loadUrl(url)
-                            return true
-                        }
-                    }
-                }
-
-                transport?.webView = tempWebView
-                resultMsg?.sendToTarget()
-                return true
+                // Popups never open; the page stays on the server's own origin.
+                Log.w("WebViewManager", "Blocked popup window")
+                return false
             }
 
             override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
