@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug only: allows plain HTTP so an emulator can reach a dev server on the Mac (10.0.2.2). -->
+<!-- Debug only: allows plain HTTP so the app can reach the Mac's dev server through adb reverse (localhost:5180). -->
 <network-security-config xmlns:tools="http://schemas.android.com/tools">
     <base-config cleartextTrafficPermitted="true"
         tools:ignore="InsecureBaseConfiguration">

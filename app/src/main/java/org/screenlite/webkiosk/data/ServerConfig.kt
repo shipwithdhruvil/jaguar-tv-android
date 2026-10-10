@@ -9,8 +9,11 @@ enum class ServerChoice { LIVE, MAC, CUSTOM }
 object ServerConfig {
     const val LIVE_URL: String = BuildConfig.LIVE_URL
 
-    /** The dev web server on the Mac, as the emulator sees it. */
-    const val MAC_URL = "http://10.0.2.2:5180/tv"
+    /**
+     * The dev web server on the Mac. Needs `adb reverse tcp:5180 tcp:5180` (emulator or a TV on USB/adb), so the
+     * page's origin is exactly http://localhost:5180, the only origin the dev API accepts.
+     */
+    const val MAC_URL = "http://localhost:5180/tv"
 
     const val SERVER_CHOICE: Boolean = BuildConfig.SERVER_CHOICE
 
