@@ -9,7 +9,9 @@ import org.screenlite.webkiosk.data.KioskSettingsFactory
 @Composable
 fun MainScreen(activity: Activity, modifier: Modifier) {
     val context = LocalContext.current
-    var url by remember { mutableStateOf("about:blank") }
+    // Null until the saved address is read, so the first frame is the branded
+    // loading screen rather than a blank page.
+    var url by remember { mutableStateOf<String?>(null) }
     val kioskSettings = remember { KioskSettingsFactory.get(context) }
 
     LaunchedEffect(Unit) {
@@ -18,7 +20,12 @@ fun MainScreen(activity: Activity, modifier: Modifier) {
         }
     }
 
-    key(url) {
-        WebViewComponent(url = url, activity = activity, modifier)
+    val current = url
+    if (current == null) {
+        BrandScreen(BrandState.Loading, modifier)
+    } else {
+        key(current) {
+            WebViewComponent(url = current, activity = activity, modifier)
+        }
     }
 }

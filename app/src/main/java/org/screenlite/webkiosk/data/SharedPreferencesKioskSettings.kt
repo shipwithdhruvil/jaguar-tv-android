@@ -80,10 +80,10 @@ class SharedPreferencesKioskSettings(context: Context) : KioskSettings {
 
     override fun getIdleTimeout(): Flow<Long> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey == keyIdleTimeout) trySend(prefs.getLong(keyIdleTimeout, 60L))
+            if (changedKey == keyIdleTimeout) trySend(prefs.getLong(keyIdleTimeout, 0L))
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(prefs.getLong(keyIdleTimeout, 60L))
+        trySend(prefs.getLong(keyIdleTimeout, 0L))
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 

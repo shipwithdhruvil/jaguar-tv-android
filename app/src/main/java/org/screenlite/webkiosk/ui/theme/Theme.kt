@@ -1,33 +1,23 @@
 package org.screenlite.webkiosk.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
-import androidx.tv.material3.lightColorScheme
 
+// Always dark: the TV sits in a gym, and the brand is black with the ember accent.
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun ScreenliteWebKioskTheme(
-    isInDarkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit,
-) {
-    val colorScheme = if (isInDarkTheme) {
-        darkColorScheme(
-            primary = Purple80,
-            secondary = PurpleGrey80,
-            tertiary = Pink80
-        )
-    } else {
-        lightColorScheme(
-            primary = Purple40,
-            secondary = PurpleGrey40,
-            tertiary = Pink40
-        )
-    }
+fun ScreenliteWebKioskTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = darkColorScheme(
+            primary = Accent,
+            onPrimary = PaperInk,
+            background = Frame,
+            onBackground = Ink,
+            surface = Graphite,
+            onSurface = Ink,
+        ),
         typography = Typography,
         content = content
     )

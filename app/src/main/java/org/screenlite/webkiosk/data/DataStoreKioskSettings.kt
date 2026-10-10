@@ -69,7 +69,7 @@ class DataStoreKioskSettings(private val context: Context) : KioskSettings {
     }
 
     override fun getIdleTimeout(): Flow<Long> = context.dataStore.data.map { prefs ->
-        prefs[keyIdleTimeout] ?: 60L
+        prefs[keyIdleTimeout] ?: 0L
     }
 
     override suspend fun setIdleTimeout(timeout: Long) {

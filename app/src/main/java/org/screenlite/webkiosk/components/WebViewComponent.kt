@@ -151,24 +151,8 @@ fun WebViewComponent(
     }
 
     when {
-        hasError -> Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            Log.w(TAG, "Showing connection error UI")
-            Text("Connection error\nRetrying...", color = Color.White)
-        }
+        hasError -> BrandScreen(BrandState.Offline)
 
-        isLoading -> Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            Log.d(TAG, "Showing loading UI")
-            Text("Loading...", color = Color.White)
-        }
+        isLoading -> BrandScreen(BrandState.Loading)
     }
 }

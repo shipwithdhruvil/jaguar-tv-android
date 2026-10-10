@@ -58,7 +58,9 @@ class IdleBrightnessController(
             TAG,
             "Idle timer reset → switching to active brightness: $activeBrightness% (next idle in ${idleTimeout}ms)"
         )
-        handler.postDelayed(checkIdleRunnable, idleTimeout)
+        // 0 means never dim: a signage screen has nobody pressing buttons, so dimming
+        // after a quiet minute would blank the ads.
+        if (idleTimeout > 0) handler.postDelayed(checkIdleRunnable, idleTimeout)
     }
 
     private fun setBrightness(level: Int) {

@@ -38,6 +38,7 @@ import org.screenlite.webkiosk.components.MainScreen
 import org.screenlite.webkiosk.components.TouchKioskInputOverlay
 import org.screenlite.webkiosk.components.TvKioskInputOverlay
 import org.screenlite.webkiosk.data.KioskSettingsFactory
+import org.screenlite.webkiosk.ui.theme.Frame
 import org.screenlite.webkiosk.ui.theme.ScreenliteWebKioskTheme
 import org.screenlite.webkiosk.ui.theme.isTvDevice
 
@@ -109,7 +110,7 @@ fun AppContent(unlockHandler: TapUnlockHandler, activity: Activity) {
 
     val isTv = isTvDevice()
 
-    Box(Modifier.fillMaxSize().background(Color.White)) {
+    Box(Modifier.fillMaxSize().background(Frame)) {
         MainScreen(activity = activity, modifier = Modifier.fillMaxSize())
 
         if(isTv) {

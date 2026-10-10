@@ -10,14 +10,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.WindowCompat
 import org.screenlite.webkiosk.components.SettingsScreen
-import org.screenlite.webkiosk.ui.theme.DarkBackgroundColor
+import org.screenlite.webkiosk.ui.theme.Frame
 import org.screenlite.webkiosk.ui.theme.TvSettingsTheme
 
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.setBackgroundDrawable(DarkBackgroundColor.toArgb().toDrawable())
+        window.setBackgroundDrawable(Frame.toArgb().toDrawable())
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         val controller = WindowCompat.getInsetsController(window, window.decorView)

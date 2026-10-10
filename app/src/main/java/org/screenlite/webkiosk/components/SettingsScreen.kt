@@ -1,27 +1,53 @@
 package org.screenlite.webkiosk.components
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import org.screenlite.webkiosk.R
 import org.screenlite.webkiosk.data.KioskSettingsFactory
 import org.screenlite.webkiosk.data.Rotation
 import org.screenlite.webkiosk.service.StayOnTopService
+import org.screenlite.webkiosk.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val GroupShape = RoundedCornerShape(20.dp)
+private val PillShape = RoundedCornerShape(50)
+
+/**
+ * The staff-only settings behind five presses of OK. Built like the CRM's grouped
+ * rows: label on the left, value on the right, hairlines between, one paper-white
+ * primary button.
+ */
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
@@ -39,8 +65,9 @@ fun SettingsScreen() {
     var idleBrightnessError by remember { mutableStateOf<String?>(null) }
     var activeBrightnessError by remember { mutableStateOf<String?>(null) }
 
-    val tabs = listOf("General", "Display", "Brightness")
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val version = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+    }
 
     LaunchedEffect(Unit) {
         kioskUrl = kioskSettings.getStartUrl().first()
@@ -51,249 +78,254 @@ fun SettingsScreen() {
         activeBrightness = kioskSettings.getActiveBrightness().first().toString()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineLarge) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
+    fun digits(value: String, set: (String) -> Unit, clearError: () -> Unit) {
+        if (value.matches(Regex("\\d*"))) { set(value); clearError() }
+    }
 
+    val save: () -> Unit = save@{
+        var hasError = false
+
+        val checkIntervalValue = checkIntervalSeconds.toLongOrNull()
+        if (checkIntervalValue == null || checkIntervalValue !in 1..99999) { checkIntervalError = "Check every: 1 to 99999 seconds"; hasError = true }
+
+        val idleTimeoutValue = idleTimeout.toLongOrNull()
+        if (idleTimeoutValue == null || idleTimeoutValue < 0) { idleTimeoutError = "Dim after: 0 or more seconds"; hasError = true }
+
+        val idleBrightnessValue = idleBrightness.toIntOrNull()
+        if (idleBrightnessValue == null || idleBrightnessValue !in 0..100) { idleBrightnessError = "Dim to: 0 to 100 %"; hasError = true }
+
+        val activeBrightnessValue = activeBrightness.toIntOrNull()
+        if (activeBrightnessValue == null || activeBrightnessValue !in 0..100) { activeBrightnessError = "Brightness: 0 to 100 %"; hasError = true }
+
+        if (hasError) return@save
+
+        (context as? ComponentActivity)?.lifecycleScope?.launch {
+            kioskSettings.setCheckInterval(checkIntervalValue!! * 1000L)
+            kioskSettings.setStartUrl(kioskUrl)
+            kioskSettings.setRotation(rotation)
+            kioskSettings.setIdleTimeout(idleTimeoutValue!!)
+            kioskSettings.setIdleBrightness(idleBrightnessValue!!)
+            kioskSettings.setActiveBrightness(activeBrightnessValue!!)
+
+            StayOnTopService.restart(context)
+        }
+        (context as? ComponentActivity)?.finish()
+    }
+
+    val screenGroup: @Composable () -> Unit = {
+        SettingsGroup("Screen", errors = emptyList()) {
+            TextRow("Address", kioskUrl, { kioskUrl = it }, KeyboardType.Uri)
+            Separator()
+            ChoiceRow("Rotation", Rotation.entries, rotation, { "${it.degrees}°" }) { rotation = it }
+        }
+    }
+    val runningGroup: @Composable () -> Unit = {
+        SettingsGroup("Keep running", errors = listOfNotNull(checkIntervalError)) {
+            TextRow("Check every", checkIntervalSeconds, { digits(it, { v -> checkIntervalSeconds = v }) { checkIntervalError = null } }, KeyboardType.Number, suffix = "s", isError = checkIntervalError != null)
+        }
+    }
+    val dimmingGroup: @Composable () -> Unit = {
+        SettingsGroup("Dimming", errors = listOfNotNull(idleTimeoutError, idleBrightnessError, activeBrightnessError), note = "0 s keeps the screen on.") {
+            TextRow("Dim after", idleTimeout, { digits(it, { v -> idleTimeout = v }) { idleTimeoutError = null } }, KeyboardType.Number, suffix = "s", isError = idleTimeoutError != null)
+            Separator()
+            TextRow("Dim to", idleBrightness, { digits(it, { v -> idleBrightness = v }) { idleBrightnessError = null } }, KeyboardType.Number, suffix = "%", isError = idleBrightnessError != null)
+            Separator()
+            TextRow("Brightness", activeBrightness, { digits(it, { v -> activeBrightness = v }) { activeBrightnessError = null } }, KeyboardType.Number, suffix = "%", isError = activeBrightnessError != null)
+        }
+    }
+
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(Frame)
+    ) {
+        val wide = maxWidth >= 720.dp
         Column(
-            modifier = Modifier
+            Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(horizontal = if (wide) 48.dp else 20.dp, vertical = if (wide) 32.dp else 24.dp)
         ) {
-            PrimaryScrollableTabRow(selectedTabIndex = selectedTabIndex, edgePadding = 16.dp) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
-                    )
+            Text("TV settings", style = TitleLarge)
+            Text(listOfNotNull("Jaguar TV", version?.let { "v$it" }).joinToString(" · "), style = Caption, modifier = Modifier.padding(top = 4.dp))
+
+            Spacer(Modifier.height(24.dp))
+
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (wide) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            screenGroup()
+                            runningGroup()
+                        }
+                        Column(Modifier.weight(1f)) { dimmingGroup() }
+                    }
+                } else {
+                    Column(
+                        Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        screenGroup()
+                        runningGroup()
+                        dimmingGroup()
+                    }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            when (selectedTabIndex) {
-                0 -> GeneralSettingsTab(
-                    kioskUrl = kioskUrl,
-                    onKioskUrlChange = { kioskUrl = it },
-                    checkIntervalSeconds = checkIntervalSeconds,
-                    onCheckIntervalChange = { checkIntervalSeconds = it },
-                    checkIntervalError = checkIntervalError,
-                    onCheckIntervalErrorChange = { checkIntervalError = it }
-                )
-                1 -> DisplaySettingsTab(
-                    rotation = rotation,
-                    onRotationChange = { rotation = it },
-                    idleTimeout = idleTimeout,
-                    onIdleTimeoutChange = { idleTimeout = it },
-                    idleTimeoutError = idleTimeoutError,
-                    onIdleTimeoutErrorChange = { idleTimeoutError = it }
-                )
-                2 -> BrightnessSettingsTab(
-                    idleBrightness = idleBrightness,
-                    activeBrightness = activeBrightness,
-                    onIdleBrightnessChange = { idleBrightness = it },
-                    onActiveBrightnessChange = { activeBrightness = it },
-                    idleBrightnessError = idleBrightnessError,
-                    activeBrightnessError = activeBrightnessError,
-                    onIdleBrightnessErrorChange = { idleBrightnessError = it },
-                    onActiveBrightnessErrorChange = { activeBrightnessError = it }
-                )
-            }
-
-            Spacer(Modifier.height(32.dp))
-
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End)
+                Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
             ) {
-                FocusableButton(
-                    text = stringResource(R.string.button_cancel),
-                    onClick = { (context as? ComponentActivity)?.finish() },
-                    background = MaterialTheme.colorScheme.surface
-                )
-
-                FocusableButton(
-                    text = stringResource(R.string.button_save),
-                    onClick = {
-                        var hasError = false
-
-                        val checkIntervalValue = checkIntervalSeconds.toLongOrNull()
-                        if (checkIntervalSeconds.isBlank()) { checkIntervalError = "Required"; hasError = true }
-                        else if (checkIntervalValue == null || checkIntervalValue !in 1..99999) { checkIntervalError = "Invalid"; hasError = true }
-
-                        val idleTimeoutValue = idleTimeout.toLongOrNull()
-                        if (idleTimeoutValue == null || idleTimeoutValue < 0) { idleTimeoutError = "Must be ≥ 0"; hasError = true }
-
-                        val idleBrightnessValue = idleBrightness.toIntOrNull()
-                        if (idleBrightnessValue == null || idleBrightnessValue !in 0..100) { idleBrightnessError = "0–100"; hasError = true }
-
-                        val activeBrightnessValue = activeBrightness.toIntOrNull()
-                        if (activeBrightnessValue == null || activeBrightnessValue !in 0..100) { activeBrightnessError = "0–100"; hasError = true }
-
-                        if (hasError) return@FocusableButton
-
-                        (context as? ComponentActivity)?.lifecycleScope?.launch {
-                            kioskSettings.setCheckInterval(checkIntervalValue!! * 1000L)
-                            kioskSettings.setStartUrl(kioskUrl)
-                            kioskSettings.setRotation(rotation)
-                            kioskSettings.setIdleTimeout(idleTimeoutValue!!)
-                            kioskSettings.setIdleBrightness(idleBrightnessValue!!)
-                            kioskSettings.setActiveBrightness(activeBrightnessValue!!)
-
-                            StayOnTopService.restart(context)
-                        }
-                        (context as? ComponentActivity)?.finish()
-                    },
-                    background = MaterialTheme.colorScheme.primary
-                )
+                PillButton("Cancel", primary = false) { (context as? ComponentActivity)?.finish() }
+                PillButton("Save", primary = true, onClick = save)
             }
         }
     }
 }
 
 @Composable
-fun GeneralSettingsTab(
-    kioskUrl: String,
-    onKioskUrlChange: (String) -> Unit,
-    checkIntervalSeconds: String,
-    onCheckIntervalChange: (String) -> Unit,
-    checkIntervalError: String?,
-    onCheckIntervalErrorChange: (String?) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 48.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Spacer(Modifier.height(24.dp))
-
-        SettingsField(
-            label = stringResource(R.string.settings_kiosk_url_label),
-            description = stringResource(R.string.settings_kiosk_url_desc),
-            value = kioskUrl,
-            onValueChange = onKioskUrlChange,
-            placeholder = stringResource(R.string.settings_kiosk_url_placeholder),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+private fun SettingsGroup(title: String, errors: List<String>, note: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Text(title, style = Caption, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(Graphite, GroupShape)
+                .padding(vertical = 4.dp),
+            content = content
         )
-
-        Spacer(Modifier.height(32.dp))
-
-        SettingsField(
-            label = stringResource(R.string.settings_check_interval_label),
-            description = stringResource(R.string.settings_check_interval_desc),
-            value = checkIntervalSeconds,
-            onValueChange = { newValue ->
-                if (newValue.isEmpty() || newValue.matches(Regex("\\d*"))) {
-                    onCheckIntervalChange(newValue)
-                    onCheckIntervalErrorChange(null)
-                }
-            },
-            placeholder = stringResource(R.string.settings_check_interval_placeholder),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            isError = checkIntervalError != null,
-            supportingText = checkIntervalError ?: stringResource(R.string.settings_check_interval_supporting)
-        )
+        if (note != null && errors.isEmpty()) {
+            Text(note, style = Caption, modifier = Modifier.padding(start = 20.dp, top = 8.dp))
+        }
+        errors.forEach {
+            Text(it, style = Caption.copy(color = AccentText), modifier = Modifier.padding(start = 20.dp, top = 8.dp))
+        }
     }
 }
 
 @Composable
-fun DisplaySettingsTab(
-    rotation: Rotation,
-    onRotationChange: (Rotation) -> Unit,
-    idleTimeout: String,
-    onIdleTimeoutChange: (String) -> Unit,
-    idleTimeoutError: String?,
-    onIdleTimeoutErrorChange: (String?) -> Unit
-) {
-    Column(
-        modifier = Modifier
+private fun Separator() {
+    Box(
+        Modifier
+            .padding(start = 20.dp)
             .fillMaxWidth()
-            .padding(horizontal = 48.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Spacer(Modifier.height(24.dp))
+            .height(1.dp)
+            .background(Hairline)
+    )
+}
 
-        RotationSelector(rotation = rotation, onRotationChange = onRotationChange)
+@Composable
+private fun RowFrame(focused: Boolean, content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .background(if (focused) Raised else Graphite, RoundedCornerShape(16.dp))
+            .border(2.dp, if (focused) Accent else Graphite, RoundedCornerShape(16.dp))
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
 
-        Spacer(Modifier.height(32.dp))
-
-        SettingsField(
-            label = stringResource(R.string.settings_idle_timeout_label),
-            description = stringResource(R.string.settings_idle_timeout_desc),
-            value = idleTimeout,
-            onValueChange = {
-                if (it.matches(Regex("\\d*"))) {
-                    onIdleTimeoutChange(it)
-                    onIdleTimeoutErrorChange(null)
+@Composable
+private fun TextRow(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType,
+    modifier: Modifier = Modifier,
+    suffix: String? = null,
+    isError: Boolean = false,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Like the TV's own settings: a row is only selected until OK is pressed, so a
+    // stray press (such as the one that opened this screen) never pops the keyboard.
+    var editing by remember { mutableStateOf(false) }
+    LaunchedEffect(focused) { if (!focused) editing = false }
+    LaunchedEffect(editing) { if (editing) keyboard?.show() else keyboard?.hide() }
+    // Back closes the keyboard without telling the field; leave edit mode then too,
+    // so Left and Right go back to moving between rows.
+    @OptIn(ExperimentalLayoutApi::class)
+    val imeVisible = WindowInsets.isImeVisible
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) imeWasVisible = true
+        else if (imeWasVisible) { imeWasVisible = false; editing = false }
+    }
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        readOnly = !editing,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { editing = false }),
+        textStyle = RowValue.copy(color = if (isError) AccentText else Ink, textAlign = TextAlign.End),
+        cursorBrush = SolidColor(Accent),
+        interactionSource = interaction,
+        // A single-line field would keep Up and Down for its cursor; on a remote they
+        // must move between rows.
+        modifier = modifier
+            .fillMaxWidth()
+            .onPreviewKeyEvent {
+                if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (it.key) {
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> if (!editing) { editing = true; true } else false
+                    Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                    Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                    Key.DirectionLeft -> if (!editing) focusManager.moveFocus(FocusDirection.Left) else false
+                    Key.DirectionRight -> if (!editing) focusManager.moveFocus(FocusDirection.Right) else false
+                    else -> false
                 }
             },
-            placeholder = "Seconds before dimming",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            isError = idleTimeoutError != null,
-            supportingText = idleTimeoutError
-        )
+        decorationBox = { field ->
+            RowFrame(focused) {
+                Text(label, style = RowLabel, modifier = Modifier.padding(end = 16.dp))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { field() }
+                if (suffix != null) Text(suffix, style = RowValue.copy(color = Muted), modifier = Modifier.padding(start = 6.dp))
+            }
+        }
+    )
+}
+
+@Composable
+private fun <T> ChoiceRow(label: String, options: List<T>, selected: T, text: (T) -> String, onSelect: (T) -> Unit) {
+    RowFrame(focused = false) {
+        Text(label, style = RowLabel, modifier = Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { option ->
+                val interaction = remember { MutableInteractionSource() }
+                val focused by interaction.collectIsFocusedAsState()
+                val isSelected = option == selected
+                Box(
+                    Modifier
+                        .background(if (isSelected) Paper else Chip, PillShape)
+                        .border(2.dp, if (focused) Accent else androidx.compose.ui.graphics.Color.Transparent, PillShape)
+                        .clickable(interactionSource = interaction, indication = null) { onSelect(option) }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(text(option), style = ButtonText.copy(fontSize = RowValue.fontSize, color = if (isSelected) PaperInk else Ink))
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun BrightnessSettingsTab(
-    idleBrightness: String,
-    activeBrightness: String,
-    onIdleBrightnessChange: (String) -> Unit,
-    onActiveBrightnessChange: (String) -> Unit,
-    idleBrightnessError: String?,
-    activeBrightnessError: String?,
-    onIdleBrightnessErrorChange: (String?) -> Unit,
-    onActiveBrightnessErrorChange: (String?) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 48.dp)
-            .verticalScroll(rememberScrollState())
+private fun PillButton(text: String, primary: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Box(
+        Modifier
+            .background(if (primary) Paper else Raised, PillShape)
+            .border(3.dp, if (focused) Accent else androidx.compose.ui.graphics.Color.Transparent, PillShape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 36.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Spacer(Modifier.height(24.dp))
-
-        SettingsField(
-            label = stringResource(R.string.settings_idle_brightness_label),
-            description = stringResource(R.string.settings_idle_brightness_desc),
-            value = idleBrightness,
-            onValueChange = {
-                if (it.matches(Regex("\\d*"))) {
-                    onIdleBrightnessChange(it)
-                    onIdleBrightnessErrorChange(null)
-                }
-            },
-            placeholder = "0–100",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            isError = idleBrightnessError != null,
-            supportingText = idleBrightnessError
-        )
-
-        Spacer(Modifier.height(32.dp))
-
-        SettingsField(
-            label = stringResource(R.string.settings_active_brightness_label),
-            description = stringResource(R.string.settings_active_brightness_desc),
-            value = activeBrightness,
-            onValueChange = {
-                if (it.matches(Regex("\\d*"))) {
-                    onActiveBrightnessChange(it)
-                    onActiveBrightnessErrorChange(null)
-                }
-            },
-            placeholder = "0–100",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            isError = activeBrightnessError != null,
-            supportingText = activeBrightnessError
-        )
+        Text(text, style = ButtonText.copy(color = if (primary) PaperInk else Ink))
     }
 }
