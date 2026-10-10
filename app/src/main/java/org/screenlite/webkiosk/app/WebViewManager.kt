@@ -2,6 +2,7 @@ package org.screenlite.webkiosk.app
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.os.Build
 import android.util.DisplayMetrics
@@ -45,13 +46,15 @@ class WebViewManager(
         settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            allowFileAccess = true
-            allowContentAccess = true
+            allowFileAccess = false
+            allowContentAccess = false
             javaScriptCanOpenWindowsAutomatically = true
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             mediaPlaybackRequiresUserGesture = false
             setSupportMultipleWindows(true)
-            setWebContentsDebuggingEnabled(true)
+            setWebContentsDebuggingEnabled(
+                context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+            )
             val displayMetrics = context.resources.displayMetrics
             setInitialScale(calculateScale(displayMetrics))
 

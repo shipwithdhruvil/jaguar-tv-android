@@ -66,7 +66,7 @@ fun SettingsScreen() {
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            ScrollableTabRow(selectedTabIndex = selectedTabIndex, edgePadding = 16.dp) {
+            PrimaryScrollableTabRow(selectedTabIndex = selectedTabIndex, edgePadding = 16.dp) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTabIndex == index,

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<network-security-config xmlns:tools="http://schemas.android.com/tools">
-    <base-config cleartextTrafficPermitted="true"
-        tools:ignore="InsecureBaseConfiguration">
+<!-- Release builds speak HTTPS only. Debug builds override this in src/debug to reach a local server. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
