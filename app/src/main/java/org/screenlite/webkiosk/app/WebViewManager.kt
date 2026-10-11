@@ -23,6 +23,8 @@ class WebViewManager(
     private val onPageLoading: (Boolean) -> Unit
 ) {
     private var currentWebView: WebView? = null
+    // The main frame's address as the client last saw it, for the bridge's origin check (it is called off the UI thread).
+    @Volatile private var pageUrl: String? = null
     fun createWebView(rotation: Rotation = Rotation.ROTATION_0): WebView {
         val webView = RotatedWebView(context).apply {
             layoutParams = android.view.ViewGroup.LayoutParams(
@@ -38,6 +40,7 @@ class WebViewManager(
 
             configureWebViewSettings()
             setupWebViewListeners()
+            addJavascriptInterface(JaguarTvBridge(context, startUrl) { pageUrl }, "JaguarTv")
         }
 
         currentWebView = webView
@@ -107,12 +110,14 @@ class WebViewManager(
                     return
                 }
                 super.onPageStarted(view, url, favicon)
+                pageUrl = url
                 view.visibility = View.INVISIBLE
                 onPageLoading(true)
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
+                pageUrl = url
                 ViewportMetaInjector.inject(view)
                 view.postDelayed({
                     view.visibility = View.VISIBLE

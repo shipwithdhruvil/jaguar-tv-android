@@ -1,8 +1,11 @@
 package org.screenlite.webkiosk.components
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.screenlite.webkiosk.app.TvPower
 import org.screenlite.webkiosk.data.KioskSettingsFactory
 import org.screenlite.webkiosk.data.Rotation
 import org.screenlite.webkiosk.data.ServerChoice
@@ -77,6 +81,26 @@ fun SettingsScreen() {
     var idleTimeoutError by remember { mutableStateOf<String?>(null) }
     var idleBrightnessError by remember { mutableStateOf<String?>(null) }
     var activeBrightnessError by remember { mutableStateOf<String?>(null) }
+
+    // Off at closing: whether the TV may be switched off (TvPower), checked again after Android's "allow" screen.
+    var canSleep by remember { mutableStateOf(TvPower.canSleep(context)) }
+    var powerNote by remember { mutableStateOf<String?>(null) }
+    val allowLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        canSleep = TvPower.canSleep(context)
+    }
+    val togglePower: () -> Unit = {
+        try {
+            if (canSleep) {
+                // A device admin is given back at once; the accessibility way is switched off on the TV's own screen.
+                TvPower.stopSleeping(context)?.let { allowLauncher.launch(it) }
+                canSleep = TvPower.canSleep(context)
+            } else {
+                allowLauncher.launch(TvPower.allowIntent(context))
+            }
+        } catch (e: ActivityNotFoundException) {
+            powerNote = "This TV has no screen for it. Allow it from a computer: see the install notes."
+        }
+    }
 
     val version = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
@@ -169,8 +193,14 @@ fun SettingsScreen() {
         }
     }
     val runningGroup: @Composable () -> Unit = {
-        SettingsGroup("Keep running", errors = listOfNotNull(checkIntervalError)) {
+        SettingsGroup(
+            "Keep running",
+            errors = listOfNotNull(checkIntervalError, powerNote),
+            note = if (canSleep) "Off at the gym's closing time. Switch it on in the morning." else "Off at closing needs your OK once.",
+        ) {
             TextRow("Check every", checkIntervalSeconds, { digits(it, { v -> checkIntervalSeconds = v }) { checkIntervalError = null } }, KeyboardType.Number, suffix = "s", isError = checkIntervalError != null)
+            Separator()
+            ActionRow("Off at closing", if (canSleep) "On" else "Allow", onClick = togglePower)
         }
     }
     val dimmingGroup: @Composable () -> Unit = {
@@ -207,11 +237,12 @@ fun SettingsScreen() {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (wide) {
                     Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        // Each column scrolls: on a TV the remote's focus brings a row below the fold into view.
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             screenGroup()
                             runningGroup()
                         }
-                        Column(Modifier.weight(1f)) { dimmingGroup() }
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { dimmingGroup() }
                     }
                 } else {
                     Column(

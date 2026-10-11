@@ -41,6 +41,33 @@
             </intent-filter>
         </receiver>
 
+        <!-- Off at closing: lets the app put the TV in standby at the gym's closing time (app/TvPower.kt). -->
+        <receiver
+            android:name=".receiver.PowerAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Off at closing where the TV has no device admin: only the accessibility "lock screen" action. -->
+        <service
+            android:name=".service.PowerAccessibilityService"
+            android:exported="true"
+            android:label="Jaguar TV: off at closing"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/power_accessibility" />
+        </service>
+
         <service
             android:name=".service.StayOnTopService"
             android:enabled="true"

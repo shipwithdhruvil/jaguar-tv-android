@@ -79,8 +79,13 @@ Full steps for the gym's TCL (Google TV): `gym-crm/docs/runbooks/tv.md` §3. In 
 1. Turn on Developer options and network debugging on the TV.
 2. `adb connect <TV-IP>:5555`, then `adb install -r jaguar-tv-….apk`.
 3. `adb shell appops set in.jaguarfitnessclub.tv SYSTEM_ALERT_WINDOW allow`, so it can reopen itself after boot.
-4. Turn off ambient mode and the energy saver's "turn off display".
-5. Open Jaguar TV and pair the code from the desk: **Manage › TV › Add screen**.
+4. Allow off at closing, so it can switch the TV off at the gym's closing time: `adb shell dpm set-active-admin in.jaguarfitnessclub.tv/org.screenlite.webkiosk.receiver.PowerAdminReceiver` on a TV with device admin (`adb shell pm list features | grep device_admin`), else switch on its accessibility service (gym-crm `docs/runbooks/tv.md` §3.3). Or TV settings › Off at closing › Allow. See "Off at closing" below.
+5. Turn off ambient mode and the energy saver's "turn off display".
+6. Open Jaguar TV and pair the code from the desk: **Manage › TV › Add screen**.
+
+## Off at closing
+
+The CRM's player page decides when the gym closes (the branch's opening hours) and, at that time, calls `window.JaguarTv.sleep()`. The app answers only its own server's page (`app/JaguarTvBridge.kt`) and puts the TV in standby (`app/TvPower.kt`) one of two ways: `DevicePolicyManager.lockNow()` as a device admin with the single policy force-lock (`res/xml/device_admin.xml`), or, on TVs without device admin (the Xiaomi tried), the accessibility "lock screen" action from `service/PowerAccessibilityService.kt`, which reads nothing on screen (`res/xml/power_accessibility.xml`). Without either the page stays black instead. A force stop switches the accessibility service off; switch it on again. Switching the TV back on is the staff's job in the morning: the TVs tried drop off the network in standby, so no app can wake them. Android keeps a device admin app from being uninstalled: give the permission back first (TV settings › Off at closing, press OK on **On**).
 
 ## What upstream already does (kept)
 

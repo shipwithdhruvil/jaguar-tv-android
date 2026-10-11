@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name" translatable="false">Jaguar TV</string>
+    <string name="power_accessibility_description" translatable="false">Switches the TV off at the gym\'s closing time. Jaguar TV reads nothing on screen.</string>
     <string name="stay_on_top_service_justification" translatable="false">This service is required to keep the web kiosk application visible and prevent it from being closed, which is the core functionality of a kiosk app.</string>
 </resources>
