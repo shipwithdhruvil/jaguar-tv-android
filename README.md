@@ -1,3 +1,9 @@
+# Jaguar TV (fork of Screenlite Web Kiosk)
+
+> **This fork is Jaguar Fitness Club's TV app.** Build from the `jaguar-server` branch. What it does, how to build, sign and install it: **[docs/JAGUAR.md](docs/JAGUAR.md)**. The upstream README follows unchanged.
+
+---
+
 # Screenlite Web Kiosk
 
 A simple Android kiosk browser app that displays web content in full-screen mode.
