@@ -38,6 +38,7 @@ import org.screenlite.webkiosk.components.MainScreen
 import org.screenlite.webkiosk.components.TouchKioskInputOverlay
 import org.screenlite.webkiosk.components.TvKioskInputOverlay
 import org.screenlite.webkiosk.data.KioskSettingsFactory
+import org.screenlite.webkiosk.data.TvBreak
 import org.screenlite.webkiosk.ui.theme.Frame
 import org.screenlite.webkiosk.ui.theme.ScreenliteWebKioskTheme
 import org.screenlite.webkiosk.ui.theme.isTvDevice
@@ -82,6 +83,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Opened again during a break (from the TV's home screen): the break is over.
+        TvBreak.endOnReturn(this)
         idleController.start()
     }
 }

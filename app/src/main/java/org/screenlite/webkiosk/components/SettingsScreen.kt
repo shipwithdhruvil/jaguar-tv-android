@@ -1,6 +1,8 @@
 package org.screenlite.webkiosk.components
 
+import android.content.Intent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -40,8 +44,11 @@ import org.screenlite.webkiosk.data.KioskSettingsFactory
 import org.screenlite.webkiosk.data.Rotation
 import org.screenlite.webkiosk.data.ServerChoice
 import org.screenlite.webkiosk.data.ServerConfig
+import org.screenlite.webkiosk.data.TvBreak
 import org.screenlite.webkiosk.service.StayOnTopService
 import org.screenlite.webkiosk.ui.theme.*
+import java.text.DateFormat
+import java.util.Date
 
 private val GroupShape = RoundedCornerShape(20.dp)
 private val PillShape = RoundedCornerShape(50)
@@ -73,6 +80,15 @@ fun SettingsScreen() {
 
     val version = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+    }
+
+    // Take a break: the choices replace the settings until one is picked or Back is pressed.
+    var choosingBreak by remember { mutableStateOf(false) }
+    val takeBreak: (Long) -> Unit = { until ->
+        TvBreak.start(context, until)
+        // To the TV's own home screen; nothing brings Jaguar TV back until the break is over.
+        context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        (context as? ComponentActivity)?.finish()
     }
 
     LaunchedEffect(Unit) {
@@ -167,6 +183,11 @@ fun SettingsScreen() {
         }
     }
 
+    if (choosingBreak) {
+        BreakPicker(onPick = takeBreak, onBack = { choosingBreak = false })
+        return
+    }
+
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -206,11 +227,67 @@ fun SettingsScreen() {
 
             Row(
                 Modifier.fillMaxWidth().padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                PillButton("Take a break", primary = false) { choosingBreak = true }
+                Spacer(Modifier.weight(1f))
                 PillButton("Cancel", primary = false) { (context as? ComponentActivity)?.finish() }
                 PillButton("Save", primary = true, onClick = save)
             }
+        }
+    }
+}
+
+private val Breaks = listOf(30L to "30 minutes", 60L to "1 hour", 120L to "2 hours", 0L to "Until opened")
+
+/**
+ * Take a break: four rows, each saying when Jaguar TV comes back. Picking one leaves for the TV's home screen;
+ * Back returns to the settings.
+ */
+@Composable
+private fun BreakPicker(onPick: (Long) -> Unit, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { first.requestFocus() }
+    val clock = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
+    BoxWithConstraints(Modifier.fillMaxSize().background(Frame)) {
+        val wide = maxWidth >= 720.dp
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = if (wide) 48.dp else 20.dp, vertical = if (wide) 32.dp else 24.dp)
+        ) {
+            Text("Take a break", style = TitleLarge)
+            Text("Use the TV for something else. Jaguar TV comes back by itself, or when you open it.", style = Caption, modifier = Modifier.padding(top = 4.dp))
+            Spacer(Modifier.height(24.dp))
+            Column(Modifier.weight(1f).widthIn(max = 640.dp)) {
+                SettingsGroup("How long", errors = emptyList()) {
+                    Breaks.forEachIndexed { i, (minutes, label) ->
+                        if (i > 0) Separator()
+                        val back = if (minutes == 0L) "Back when opened" else "Back at ${clock.format(Date(System.currentTimeMillis() + minutes * 60_000))}"
+                        ActionRow(label, back, if (i == 0) Modifier.focusRequester(first) else Modifier) {
+                            onPick(if (minutes == 0L) TvBreak.UNTIL_OPENED else System.currentTimeMillis() + minutes * 60_000)
+                        }
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.End) {
+                PillButton("Cancel", primary = false, onClick = onBack)
+            }
+        }
+    }
+}
+
+/** A row that does something when OK is pressed: label on the left, what will happen on the right. */
+@Composable
+private fun ActionRow(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Box(modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)) {
+        RowFrame(focused) {
+            Text(label, style = RowLabel, modifier = Modifier.weight(1f))
+            Text(value, style = RowValue.copy(color = Muted), textAlign = TextAlign.End)
         }
     }
 }

@@ -20,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.screenlite.webkiosk.MainActivity
 import org.screenlite.webkiosk.data.KioskSettingsFactory
+import org.screenlite.webkiosk.data.TvBreak
 
 class StayOnTopService : Service() {
     companion object {
@@ -46,10 +47,12 @@ class StayOnTopService : Service() {
 
     private val checkTask = object : Runnable {
         override fun run() {
-            if (!isActivityVisible) {
-                bringAppToFront()
-            } else {
+            if (isActivityVisible) {
                 Log.i("StayOnTopService", "Activity is already visible, skipping bring to front")
+            } else if (TvBreak.isOn(this@StayOnTopService)) {
+                Log.i("StayOnTopService", "On a break, leaving the TV to whatever is open")
+            } else {
+                bringAppToFront()
             }
             handler.postDelayed(this, checkInterval)
         }

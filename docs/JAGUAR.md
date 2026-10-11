@@ -26,7 +26,11 @@ Either way, the WebView refuses to navigate away from the chosen origin. The rul
 
 **This Mac** needs `adb reverse tcp:5180 tcp:5180` first. The CRM's dev API accepts browser requests only from the origin `http://localhost:5180`, and the reverse gives the emulator's or TV's page exactly that origin. `10.0.2.2` would not work.
 
-Settings open with **five quick presses of OK** on the remote (`adb shell input keyevent 23`).
+Settings open with **five quick presses of OK** on the remote (`adb shell input keyevent 23`), over anything on screen.
+
+## Take a break
+
+Settings › **Take a break** (bottom left) lets the gym use the TV for something else: 30 minutes, 1 hour, 2 hours or Until opened. The TV goes to its home screen and the stay-on-top check leaves it alone until the time is up, then brings Jaguar TV back within one check. Opening Jaguar TV ends a break early, and a restart ends "Until opened". The break is kept in `data/TvBreak.kt`; `StayOnTopService` skips while it is on.
 
 ## Build
 
